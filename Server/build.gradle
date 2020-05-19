@@ -1,0 +1,72 @@
+import org.gradle.internal.jvm.Jvm
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'c'
+    id 'org.jetbrains.kotlin.jvm' version '1.3.71'
+}
+
+mainClassName = 'com.mancersoft.litevpnserver.Main'
+
+group 'com.mancersoft'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation("com.google.guava:guava:29.0-jre")
+    compile 'co.trikita:log:1.1.5'
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+model {
+    platforms {
+        x64 {
+            architecture "x64"
+        }
+    }
+
+    components {
+        tun(NativeLibrarySpec) {
+            binaries.all {
+                if (targetPlatform.operatingSystem.macOsX) {
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include"
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include/darwin"
+                    cCompiler.args '-mmacosx-version-min=10.4'
+                    linker.args '-mmacosx-version-min=10.4'
+                } else if (targetPlatform.operatingSystem.linux) {
+                    cCompiler.args '-I', "/usr/bin"
+                    cCompiler.args '-I', "/usr/lib"
+                    cCompiler.args '-I', "/usr/include"
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include"
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include/linux"
+                    cCompiler.args '-D_FILE_OFFSET_BITS=64'
+                } else if (targetPlatform.operatingSystem.windows) {
+                    cCompiler.args "-I${Jvm.current().javaHome}/include"
+                    cCompiler.args "-I${Jvm.current().javaHome}/include/win32"
+                    linker.args "Shlwapi.lib", "Advapi32.lib"
+                } else if (targetPlatform.operatingSystem.freeBSD) {
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include"
+                    cCompiler.args '-I', "${Jvm.current().javaHome}/include/freebsd"
+                }
+            }
+        }
+    }
+}
+
+run.dependsOn 'tunSharedLibrary'
+
+run {
+    systemProperty "java.library.path", file("${buildDir}/libs/tun/shared").absolutePath
+}
