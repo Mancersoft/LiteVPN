@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.content.pm.PackageManager;
 import android.net.ProxyInfo;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
 import android.util.Log;
@@ -54,14 +55,16 @@ class InterfaceManager {
                 } else {
                     builder.addDisallowedApplication(packageName);
                 }
-            } catch (PackageManager.NameNotFoundException e){
+            } catch (PackageManager.NameNotFoundException e) {
                 Log.w(TAG, "Package not available: " + packageName, e);
             }
         }
 
         builder.setSession(serverName).setConfigureIntent(configureIntent);
-        if (!TextUtils.isEmpty(proxyHostName)) {
-            builder.setHttpProxy(ProxyInfo.buildDirectProxy(proxyHostName, proxyHostPort));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (!TextUtils.isEmpty(proxyHostName)) {
+                builder.setHttpProxy(ProxyInfo.buildDirectProxy(proxyHostName, proxyHostPort));
+            }
         }
 
         builder.setBlocking(true);

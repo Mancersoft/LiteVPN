@@ -1,28 +1,41 @@
 package com.mancersoft.litevpn.transport;
 
-import com.mancersoft.litevpn.ConnectionParams;
-
+import java.io.Closeable;
 import java.util.concurrent.CompletableFuture;
 
 public class TelegramTransport implements IVpnTransport {
-
     @Override
-    public CompletableFuture<ConnectionParams> connect() throws Exception {
+    public Closeable createSocket() throws Exception {
         return null;
     }
 
     @Override
-    public void send(byte[] data, int length) throws Exception {
+    public boolean isReliable() {
+        return true;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> connect() {
+        return null;
+    }
+
+    @Override
+    public void disconnect() {
 
     }
 
     @Override
-    public int receive(byte[] data) throws Exception {
-        return 0;
+    public void sendAsync(Packet packet) {
+
     }
 
     @Override
-    public void disconnect() throws Exception {
+    public void setOnMessageListener(MessageListener messageListener) {
+
+    }
+
+    @Override
+    public void setOnClosedListener(ClosedListener closedListener) {
 
     }
 }

@@ -1,18 +1,18 @@
 package com.mancersoft.litevpn;
 
 import android.app.PendingIntent;
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.NetworkCapabilities;
 import android.net.VpnService;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.mancersoft.litevpn.transport.IVpnTransport;
+import com.mancersoft.litevpn.transport.Packet;
+import com.mancersoft.litevpn.transport.TransportType;
 
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class VpnManager {
@@ -23,13 +23,15 @@ public class VpnManager {
 
     public static final String TAG = "LiteVpnClient";
 
-    private static final int MAX_PACKET_SIZE = Short.MAX_VALUE;
+    public static final int MAX_PACKET_SIZE = Short.MAX_VALUE;
+    static final int PACKET_TYPE_BYTE_OFFSET = 0;
+    private static final byte PARAMS_PACKET = 0;
 
     private final VpnService mService;
 
     private final String mServerName;
 
-    private PendingIntent mConfigureIntent;
+    private final PendingIntent mConfigureIntent;
     private OnConnectionChangedListener mOnConnectionChangedListener;
 
     private String mProxyHostName;
@@ -38,33 +40,21 @@ public class VpnManager {
     private final boolean mAllowPackages;
     private final Set<String> mPackages;
 
+    private final ConnectionManager mConnManager;
     private final IVpnTransport mTransport;
     private final InterfaceManager mIface;
 
-    private final AtomicBoolean mConnected = new AtomicBoolean(false);
-
     private final ExecutorService mExecutorService = Executors.newCachedThreadPool();
 
-    private static boolean isNetworkAvailable(Context context) {
-        if (context == null) {
-            return false;
-        }
+    private Future<?> mUserToInternetProcessing;
 
-        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivityManager == null) {
-            return false;
-        }
+    private final AtomicBoolean mIsConnected = new AtomicBoolean(false);
 
-        NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.getActiveNetwork());
-        return capabilities != null &&
-                (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
-                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH));
-    }
-
-    VpnManager(final VpnService service, final String serverName, IVpnTransport transport, final String proxyHostName, final int proxyHostPort,
-               boolean allowPackages, final Set<String> packages) {
+    VpnManager(final VpnService service, final String serverName,
+               TransportType transportType, String sharedSecret,
+               final String proxyHostName, final int proxyHostPort,
+               boolean allowPackages, final Set<String> packages, PendingIntent intent,
+               Object... transportParams) {
         mService = service;
         mServerName = serverName;
 
@@ -75,12 +65,14 @@ public class VpnManager {
 
         mAllowPackages = allowPackages;
         mPackages = packages;
-        mTransport = transport;
-        mIface = InterfaceManager.getInstance();
-    }
-
-    void setConfigureIntent(PendingIntent intent) {
         mConfigureIntent = intent;
+        mIface = InterfaceManager.getInstance();
+        mConnManager = new ConnectionManager(sharedSecret, service);
+
+        Object[] fullTransportParams = new Object[transportParams.length + 1];
+        fullTransportParams[0] = serverName;
+        System.arraycopy(transportParams, 0, fullTransportParams, 1, transportParams.length);
+        mTransport = mConnManager.createTransport(transportType, fullTransportParams);
     }
 
     void setOnConnectionChangedListener(OnConnectionChangedListener listener) {
@@ -98,74 +90,100 @@ public class VpnManager {
         try {
             Log.i(TAG, "Start connection");
 
-            if (!isNetworkAvailable(mService)) {
+            if (!Utils.isNetworkAvailable(mService)) {
                 throw new Exception("Network is not available");
             }
 
-            mTransport.connect().thenAccept((params) -> {
-                if (params == null) {
-                    return; // Show toast with error
+            if (!mConnManager.protectTransport(mTransport)) {
+                throw new Exception("Cannot protect the tunnel");
+            }
+
+            mTransport.connect().thenAccept((isConnected) -> {
+                if (!isConnected) {
+                    disconnect(true);
+                    return;
                 }
 
-                mIface.init(params, mService, mServerName, mConfigureIntent,
-                        mProxyHostName, mProxyHostPort, mAllowPackages, mPackages);
-                mConnected.set(true);
-                invokeOnConnectionChanged(mConnected.get());
+                mConnManager.sendConnectQuery(mTransport).thenAccept((params) -> {
+                    mIsConnected.set(true);
+                    mIface.init(params, mService, mServerName, mConfigureIntent,
+                            mProxyHostName, mProxyHostPort, mAllowPackages, mPackages);
 
-                mExecutorService.execute(() -> {
-                    try {
-                        byte[] packet = new byte[VpnManager.MAX_PACKET_SIZE];
-                        while (mConnected.get()) {
-                            //Log.d(TAG, "Start read iface");
-                            int length = mIface.read(packet);
-                            //Log.d(TAG, "Stop read iface");
-                            if (length > 0) {
-                                //Log.d(TAG, "Start send transport");
-                                mTransport.send(packet, length);
-                                //Log.d(TAG, "Stop send transport");
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Outgoing thread error", e);
-                    }
-
-                    disconnect(true);
-                });
-                mExecutorService.execute(() -> {
-                    try {
-                        byte[] packet = new byte[VpnManager.MAX_PACKET_SIZE];
-                        while (mConnected.get()) {
-                            //Log.d(TAG, "Start receive transport");
-                            int length = mTransport.receive(packet);
-                            //Log.d(TAG, "Stop receive transport");
-                            if (packet[0] != 0) {
-                                //Log.d(TAG, "Start write iface");
-                                mIface.write(packet, length);
-                                //Log.d(TAG, "Stop write iface");
-                            }
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Incoming thread error", e);
-                    }
-
-                    disconnect(true);
+                    mTransport.setOnMessageListener(this::internetToUserProcessing);
+                    mTransport.setOnClosedListener(this::connectionClosedProcessing);
+                    mUserToInternetProcessing =
+                            mExecutorService.submit(this::userToInternetProcessing);
+                    invokeOnConnectionChanged(true);
                 });
             });
         } catch (Exception e) {
             Log.e(TAG, "Connection failed, exiting", e);
+            disconnect(true);
         }
     }
 
+    private void userToInternetProcessing() {
+        try {
+            byte[] data = new byte[VpnManager.MAX_PACKET_SIZE];
+            Packet packet = new Packet();
+            packet.setData(data);
+            while (!Thread.currentThread().isInterrupted()) {
+                //System.out.println("Start read iface");
+                int length = mIface.read(data);
+                //System.out.println("Stop read iface");
+
+                packet.setLength(length);
+                mTransport.sendAsync(packet);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "VpnManager userToInternetProcessing error", e);
+            disconnect(true);
+        }
+    }
+
+    private void internetToUserProcessing(Packet packet) {
+        mExecutorService.execute(() -> {
+            try {
+                byte[] data = packet.getData();
+                if (data.length > MAX_PACKET_SIZE) {
+                    return;
+                }
+
+                if (data[PACKET_TYPE_BYTE_OFFSET] != PARAMS_PACKET) {
+                    //Log.d(TAG, "Start write iface");
+                    mIface.write(data, packet.getLength());
+                    //Log.d(TAG, "Stop write iface");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "VpnManager internetToUserProcessing error", e);
+                disconnect(true);
+            }
+        });
+    }
+
+    private void connectionClosedProcessing(boolean isByUser) {
+        disconnect(!isByUser);
+    }
+
     void disconnect(boolean notify) {
-        if (!mConnected.get()) {
-            return;
+        mTransport.setOnMessageListener(null);
+        mTransport.setOnClosedListener(null);
+        if (mUserToInternetProcessing != null) {
+            mUserToInternetProcessing.cancel(true);
         }
 
-        mConnected.set(false);
-        try {
-            mTransport.disconnect();
-        } catch (Exception e) {
-            Log.e(TAG, "Unable to disconnect transport layer", e);
+        if (mIsConnected.get()) {
+            mExecutorService.execute(() -> {
+                try {
+                    mConnManager.sendDisconnectQuery(mTransport);
+                    Thread.sleep(100);
+                    mTransport.disconnect();
+                } catch (InterruptedException e) {
+                    Log.e(TAG, "Unable to disconnect transport layer", e);
+                } catch (Exception ignored) {
+                    // normal exit
+                }
+            });
         }
 
         try {
@@ -174,8 +192,9 @@ public class VpnManager {
             Log.e(TAG, "Unable to close interface", e);
         }
 
+        mIsConnected.set(false);
         if (notify) {
-            invokeOnConnectionChanged(mConnected.get());
+            invokeOnConnectionChanged(false);
         }
     }
 }

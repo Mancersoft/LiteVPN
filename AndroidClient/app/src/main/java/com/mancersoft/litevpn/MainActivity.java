@@ -27,6 +27,8 @@ public class MainActivity extends Activity {
         String PACKAGES = "packages";
     }
 
+    private boolean mWaitForResult = false;
+
     @SuppressLint("ApplySharedPref")
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -92,6 +94,7 @@ public class MainActivity extends Activity {
                     .putStringSet(Prefs.PACKAGES, packageSet)
                     .commit();
             Intent intent = VpnService.prepare(MainActivity.this);
+            mWaitForResult = true;
             if (intent != null) {
                 startActivityForResult(intent, 0);
             } else {
@@ -123,9 +126,11 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
-        if (result == RESULT_OK) {
+        if (mWaitForResult && result == RESULT_OK) {
             startService(getServiceIntent().setAction(LiteVpnService.ACTION_CONNECT));
         }
+
+        mWaitForResult = false;
     }
 
     private Intent getServiceIntent() {

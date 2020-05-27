@@ -1,16 +1,29 @@
 package com.mancersoft.litevpn.transport;
 
-import com.mancersoft.litevpn.ConnectionParams;
-
+import java.io.Closeable;
 import java.util.concurrent.CompletableFuture;
 
 public interface IVpnTransport {
 
-    CompletableFuture<ConnectionParams> connect() throws Exception;
+    interface MessageListener {
+        void onMessage(Packet packet);
+    }
 
-    void send(byte[] data, int length) throws Exception;
+    interface ClosedListener {
+        void onClosed(boolean isByUser);
+    }
 
-    int receive(byte[] data) throws Exception;
+    Closeable createSocket() throws Exception;
 
-    void disconnect() throws Exception;
+    boolean isReliable();
+
+    CompletableFuture<Boolean> connect();
+
+    void disconnect();
+
+    void sendAsync(Packet packet);
+
+    void setOnMessageListener(MessageListener messageListener);
+
+    void setOnClosedListener(ClosedListener closedListener);
 }

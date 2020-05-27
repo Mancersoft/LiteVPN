@@ -1,137 +1,145 @@
 package com.mancersoft.litevpn.transport;
 
-import android.net.VpnService;
 import android.util.Log;
 
-import com.mancersoft.litevpn.ConnectionParams;
 import com.mancersoft.litevpn.VpnManager;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
-import kotlin.text.Charsets;
-
-import static java.nio.charset.StandardCharsets.US_ASCII;
+import static com.mancersoft.litevpn.VpnManager.TAG;
 
 public class UdpTransport implements IVpnTransport {
 
-    private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
-
     private DatagramChannel mUdpChannel;
 
-    private final String mSharedSecret;
+    private final ExecutorService mExecutorService = Executors.newCachedThreadPool();
+
     private final String mServerName;
     private final int mServerPort;
-    private final VpnService mService;
 
-    public UdpTransport(String sharedSecret, String serverName, int serverPort, VpnService service) {
-        mSharedSecret = sharedSecret;
+    private Future<?> mIncomingMessageProcessing;
+
+    private MessageListener mMessageListener;
+    private ClosedListener mClosedListener;
+
+    public UdpTransport(String serverName, int serverPort) {
         mServerName = serverName;
         mServerPort = serverPort;
-        mService = service;
     }
 
     @Override
-    public CompletableFuture<ConnectionParams> connect() {
+    public Closeable createSocket() throws IOException {
+        mUdpChannel = DatagramChannel.open();
+        return mUdpChannel.socket();
+    }
+
+    @Override
+    public boolean isReliable() {
+        return false;
+    }
+
+    @Override
+    public void setOnMessageListener(MessageListener messageListener) {
+        mMessageListener = messageListener;
+    }
+
+    @Override
+    public void setOnClosedListener(ClosedListener closedListener) {
+        mClosedListener = closedListener;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> connect() {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                mUdpChannel = DatagramChannel.open();
-                if (!mService.protect(mUdpChannel.socket())) {
-                    throw new IllegalStateException("Cannot protect the tunnel");
-                }
-
+                disconnect();
                 SocketAddress serverAddress = new InetSocketAddress(mServerName, mServerPort);
                 mUdpChannel.connect(serverAddress);
                 mUdpChannel.configureBlocking(true);
-
-                ByteBuffer packet = ByteBuffer.allocate(1024);
-                packet.put((byte) 0).put(mSharedSecret.getBytes(Charsets.US_ASCII)).flip();
-                for (int i = 0; i < 3; ++i) {
-                    packet.position(0);
-                    mUdpChannel.write(packet);
-                }
-                packet.clear();
-
-                for (int i = 0; i < MAX_HANDSHAKE_ATTEMPTS; ++i) {
-                    int length = mUdpChannel.read(packet);
-                    if (packet.get(0) == 0) {
-                        return getConnectionParams(
-                                new String(packet.array(),
-                                        1,
-                                        length - 1,
-                                        US_ASCII).trim());
-                    }
-                }
+                mIncomingMessageProcessing = mExecutorService.submit(this::incomingMessagesProcessing);
+                return true;
             } catch (IOException e) {
-                Log.e(VpnManager.TAG, "UdpTransport connect error", e);
+                Log.e(TAG, "UdpTransport connect error", e);
+                return false;
             }
-
-            return null;
         });
     }
 
-    private static ConnectionParams getConnectionParams(String parameters) {
-        ConnectionParams params = new ConnectionParams();
-        for (String parameter : parameters.split(" ")) {
-            String[] fields = parameter.split(",");
-            try {
-                switch (fields[0].charAt(0)) {
-                    case 'm':
-                        params.setMtu(Short.parseShort(fields[1]));
-                        break;
-                    case 'a':
-                        params.setAddress(fields[1], Byte.parseByte(fields[2]));
-                        break;
-                    case 'r':
-                        params.setRoute(fields[1], Byte.parseByte(fields[2]));
-                        break;
-                    case 'd':
-                        params.setDnsServer(fields[1]);
-                        break;
-                    case 's':
-                        params.setSearchDomain(fields[1]);
-                        break;
-                }
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Bad parameter: " + parameter);
-            }
+    private void disconnect(boolean isByUser) {
+        disconnect();
+        if (mClosedListener != null) {
+            mClosedListener.onClosed(isByUser);
         }
-
-        return params;
     }
 
     @Override
-    public void send(byte[] data, int length) throws IOException {
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        buffer.limit(length);
+    public void disconnect() {
+        try {
+            if (mIncomingMessageProcessing != null) {
+                mIncomingMessageProcessing.cancel(true);
+            }
+
+            if (mUdpChannel != null && mUdpChannel.isConnected()) {
+                mUdpChannel.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "UdpTransport disconnect error", e);
+        }
+    }
+
+    @Override
+    public void sendAsync(Packet packetToSend) {
+        Packet packet = new Packet(packetToSend);
+        mExecutorService.execute(() -> {
+            try {
+                send(packet.getData(), packet.getLength());
+            } catch (ClosedChannelException e1) {
+                disconnect(true);
+            } catch (Exception e2) {
+                Log.e(TAG, "UdpTransport sendAsync error", e2);
+                disconnect(false);
+            }
+        });
+    }
+
+    private void send(byte[] data, int length) throws IOException {
+        ByteBuffer buffer = ByteBuffer.wrap(data, 0, length);
         mUdpChannel.write(buffer);
     }
 
-    @Override
-    public int receive(byte[] data) throws IOException {
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-        return mUdpChannel.read(buffer);
+    private void receive(Packet packet) throws IOException {
+        ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
+        packet.setLength(mUdpChannel.read(buffer));
     }
 
-    @Override
-    public void disconnect() throws IOException {
-        if (mUdpChannel == null) {
-            return;
-        }
-
-        if (mUdpChannel.isConnected()) {
-            ByteBuffer packet = ByteBuffer.allocate(1024);
-            packet.put((byte) 1).flip();
-            for (int i = 0; i < 3; ++i) {
-                packet.position(0);
-                mUdpChannel.write(packet);
+    private void incomingMessagesProcessing() {
+        try {
+            Packet packet = new Packet();
+            packet.setData(new byte[VpnManager.MAX_PACKET_SIZE]);
+            while (!Thread.currentThread().isInterrupted()) {
+                //System.out.println("Start receive transport");
+                this.receive(packet);
+                //System.out.println("Stop receive transport");
+                if (mMessageListener != null) {
+                    mMessageListener.onMessage(new Packet(packet));
+                }
             }
+        } catch (ClosedByInterruptException e1) {
+            disconnect(true);
+        } catch (Exception e2) {
+            Log.e(TAG, "UdpTransport incomingMessagesProcessing error", e2);
+            disconnect(false);
         }
-
-        mUdpChannel.close();
     }
 }

@@ -11,8 +11,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.widget.Toast;
 
-import com.mancersoft.litevpn.transport.IVpnTransport;
-import com.mancersoft.litevpn.transport.UdpTransport;
+import com.mancersoft.litevpn.transport.TransportType;
 
 import java.util.Collections;
 import java.util.Set;
@@ -59,11 +58,11 @@ public class LiteVpnService extends VpnService implements Handler.Callback {
         if (message.what != R.string.disconnected) {
             updateForegroundNotification(message.what);
         }
+
         return true;
     }
 
     private void connect() {
-        updateForegroundNotification(R.string.connecting);
         mHandler.sendEmptyMessage(R.string.connecting);
 
         final SharedPreferences prefs = getSharedPreferences(MainActivity.Prefs.NAME, MODE_PRIVATE);
@@ -80,10 +79,9 @@ public class LiteVpnService extends VpnService implements Handler.Callback {
             mVpnManager.disconnect(false);
         }
 
-        IVpnTransport transport = new UdpTransport(secret, server, port, this);
-        mVpnManager = new VpnManager(this, server, transport, proxyHost, proxyPort,
-                allow, packages);
-        mVpnManager.setConfigureIntent(mConfigureIntent);
+
+        mVpnManager = new VpnManager(this, server, TransportType.UDP, secret,
+                proxyHost, proxyPort, allow, packages, mConfigureIntent, port);
         mVpnManager.setOnConnectionChangedListener((isConnected) ->
         {
             if (isConnected) {
