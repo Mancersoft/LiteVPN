@@ -1,10 +1,17 @@
 package com.mancersoft.litevpnserver;
 
 import com.mancersoft.litevpnserver.transport.*;
+import trikita.log.Log;
 
 import java.util.TreeSet;
 
+import static com.mancersoft.litevpnserver.VpnManager.*;
+
 public class ConnectionManager {
+
+    private static final int SHARED_SECRET_OFFSET = 1;
+
+    private static final int NOT_RELIABLE_SEND_PARAMS_COUNT = 3;
 
     private static ConnectionManager mInstance;
 
@@ -40,10 +47,46 @@ public class ConnectionManager {
 
     public IVpnTransport createTransport(TransportType transportType, Object... transportParams) {
         return switch (transportType) {
-            case WEBSOCKET -> new WebSocketTransport();
+            case WEBSOCKET -> new WebSocketTransport((String) transportParams[0]);
             case TELEGRAM -> new TelegramTransport();
-            default -> new UdpTransport(mSharedSecret, (int) transportParams[0], mParams);
+            default -> new UdpTransport((int) transportParams[0]);
         };
+    }
+
+    private boolean checkSecret(Packet packet) {
+        try {
+            String receivedSecret = new String(packet.getData(), SHARED_SECRET_OFFSET,
+                    packet.getLength() - SHARED_SECRET_OFFSET);
+            return mSharedSecret.equals(receivedSecret);
+        } catch (Exception e) {
+            Log.e(TAG, "ConnectionManager checkSecret error", e);
+            return false;
+        }
+    }
+
+    private boolean sendParams(IVpnTransport transport, String vpnIpAddress, Object userDest) {
+        try {
+            mParams.setAddress(vpnIpAddress, mParams.getAddressPrefixLength());
+            byte[] parameters = mParams.getBytes();
+            if (parameters.length > MAX_PACKET_SIZE) {
+                throw new Exception("Params is too long");
+            }
+
+            parameters[PACKET_TYPE_BYTE_OFFSET] = CONNECT_PACKET;
+            var paramPacket = new Packet();
+            paramPacket.setData(parameters);
+            paramPacket.setLength(parameters.length);
+            paramPacket.setDestination(userDest);
+            int sendCount = transport.isReliable() ? 1 : NOT_RELIABLE_SEND_PARAMS_COUNT;
+            for (int i = 0; i < sendCount; ++i) {
+                transport.sendAsync(paramPacket);
+            }
+
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "ConnectionManager sendParams error", e);
+            return false;
+        }
     }
 
     public String processConnection(IVpnTransport transport, Packet packet, String ipAddress) {
@@ -59,7 +102,7 @@ public class ConnectionManager {
         }
 
         //newIp = "10.255.255.255";
-        if (transport.receiveConnection(packet, newIp)) {
+        if (checkSecret(packet) && this.sendParams(transport, newIp, packet.getSource())) {
             if (ipAddress == null) {
                 occupiedIps.add(integerIp);
                 clientIpAddress++;

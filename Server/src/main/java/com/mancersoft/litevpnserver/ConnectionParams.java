@@ -1,6 +1,6 @@
 package com.mancersoft.litevpnserver;
 
-import kotlin.text.Charsets;
+import static java.nio.charset.StandardCharsets.US_ASCII;
 
 public class ConnectionParams {
 
@@ -27,7 +27,7 @@ public class ConnectionParams {
     }
 
     public byte[] getBytes() {
-        return this.toString().getBytes(Charsets.US_ASCII);
+        return this.toString().getBytes(US_ASCII);
     }
 
     public short getMtu() {

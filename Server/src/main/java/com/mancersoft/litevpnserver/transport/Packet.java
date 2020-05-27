@@ -7,6 +7,17 @@ public class Packet {
     private byte[] mData;
     private int mLength;
 
+    public Packet() {
+    }
+
+    public Packet(Packet packet) {
+        mSource = packet.mSource;
+        mDestination = packet.mDestination;
+        mData = new byte[packet.mLength];
+        System.arraycopy(packet.getData(), 0, mData, 0, packet.mLength);
+        mLength = packet.mLength;
+    }
+
     public Object getSource() {
         return mSource;
     }

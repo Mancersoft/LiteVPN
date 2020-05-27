@@ -2,13 +2,10 @@ package com.mancersoft.litevpnserver;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import trikita.log.Log;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-
-import static com.mancersoft.litevpnserver.VpnManager.TAG;
 
 public class NatManager {
 
@@ -76,7 +73,7 @@ public class NatManager {
             Utils.changeIpPort(packet, mVpnTunnelDestination, currentExternalPort, true);
             return true;
         } catch (Exception e) {
-            Log.e(TAG, "NatManager convertToInternet error", e);
+            //Log.e(TAG, "NatManager convertToInternet error", e);
             return false;
         }
     }
@@ -98,7 +95,7 @@ public class NatManager {
             Utils.changeIpPort(packet, ipPortPair.getFirst(), ipPortPair.getSecond(), false);
             return true;
         } catch (Exception e) {
-            Log.e(TAG, "NatManager convertFromInternet error", e);
+            //Log.e(TAG, "NatManager convertFromInternet error", e);
             return false;
         }
     }

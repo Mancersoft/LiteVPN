@@ -19,6 +19,8 @@ public class Utils {
     private final static int TCP_CHECKSUM_OFFSET = 16;
     private final static int UDP_CHECKSUM_OFFSET = 6;
 
+    private Utils() {}
+
     private static void checksumChange(byte[] packet, int offset, int checksumChange) {
         short checksum = (short) ~((packet[offset] << 8 & 0xFF00) + (packet[offset + 1] & 0xFF));
         int finalSum = (checksum & 0xFFFF) + checksumChange;
@@ -57,7 +59,6 @@ public class Utils {
         return (short) ((packet[offset] << 8 & 0xFF00) + (packet[offset + 1] & 0xFF));
     }
 
-    @SuppressWarnings("SameParameterValue")
     private static String portToString(byte[] packet, int offset) {
         return Integer.toString(getWordValue(packet, offset) & 0xFFFF);
     }
