@@ -27,7 +27,7 @@ public class Main {
     private static final String FIRST_CLIENT_IP = "10.0.0.1"; // "10.0.0.3";
 
     private static final int UDP_PORT = 8000;
-    //private static final String WEB_SOCKET_SERVER_ID = "WebSocketServerLiteVPN";
+    private static final String WEB_SOCKET_SERVER_ID = "ServerLiteVPN";
 
     static {
         try {
@@ -41,7 +41,6 @@ public class Main {
         try {
             String sudoPassword = "kali";
             String sharedSecret = "test";
-            TransportType transportType = TransportType.UDP;
 
             var iface = InterfaceManager.getInstance();
             iface.init(sudoPassword, INTERNET_INTERFACE, TUNNEL_INTERFACE,
@@ -53,8 +52,8 @@ public class Main {
             var natMan = NatManager.getInstance();
             natMan.init(VPN_TUN_DEST);
             var vpnMan = VpnManager.getInstance();
-            IVpnTransport transport = connMan.createTransport(transportType, UDP_PORT);
-            //IVpnTransport transport = connMan.createTransport(transportType, WEB_SOCKET_SERVER_ID);
+            //IVpnTransport transport = connMan.createTransport(TransportType.UDP, Integer.toString(UDP_PORT));
+            IVpnTransport transport = connMan.createTransport(TransportType.WEBSOCKET, WEB_SOCKET_SERVER_ID);
             vpnMan.init(transport);
             vpnMan.setReceiveConnections(true);
 

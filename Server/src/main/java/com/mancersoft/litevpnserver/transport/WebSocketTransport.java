@@ -124,7 +124,7 @@ public class WebSocketTransport implements IVpnTransport {
                     mMessageListener.onMessage(packet);
                 }
             } catch (Exception e) {
-                Log.e(TAG, "WebSocketTransport onMessage error", e);
+                Log.e(TAG, "WebSocketTransport onMessage error", e, "\n" + message);
             }
         }
 

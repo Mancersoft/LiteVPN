@@ -45,11 +45,11 @@ public class ConnectionManager {
         mParams.setSearchDomain(searchDomain);
     }
 
-    public IVpnTransport createTransport(TransportType transportType, Object... transportParams) {
+    public IVpnTransport createTransport(TransportType transportType, String... transportParams) {
         return switch (transportType) {
-            case WEBSOCKET -> new WebSocketTransport((String) transportParams[0]);
+            case WEBSOCKET -> new WebSocketTransport(transportParams[0]);
             case TELEGRAM -> new TelegramTransport();
-            default -> new UdpTransport((int) transportParams[0]);
+            default -> new UdpTransport(Integer.parseInt(transportParams[0]));
         };
     }
 
