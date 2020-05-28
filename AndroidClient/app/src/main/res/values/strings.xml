@@ -2,13 +2,15 @@
 <resources>
     <string name="app">LiteVPN</string>
 
-    <string name="address">Server Address:</string>
-    <string name="port">Server Port:</string>
+    <string name="server_id">Server Id:</string>
+    <string name="other_params">Other params (comma separated):</string>
     <string name="secret">Shared Secret:</string>
+    <string name="vpn_type">Vpn type:</string>
+    <string name="udp">UDP</string>
+    <string name="websocket">WebSocket</string>
+    <string name="telegram">Telegram</string>
     <string name="connect">Connect!</string>
     <string name="disconnect">Disconnect!</string>
-    <string name="proxyhost">HTTP proxy hostname</string>
-    <string name="proxyport">HTTP proxy port</string>
 
     <string name="packages">Packages (comma separated):</string>
     <string name="allowed">Allow</string>
@@ -17,9 +19,6 @@
     <string name="connecting">LiteVPN is connecting…</string>
     <string name="connected">LiteVPN is connected!</string>
     <string name="disconnected">LiteVPN is disconnected!</string>
-    <string name="incomplete_proxy_settings">
-        Incomplete proxy settings. For HTTP proxy we require both hostname and port settings.
-    </string>
     <string name="unknown_package_names">
         Some of the specified package names do not correspond to any installed packages.
     </string>

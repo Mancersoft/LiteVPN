@@ -40,6 +40,7 @@ public class UdpTransport implements IVpnTransport {
 
     @Override
     public Closeable createSocket() throws IOException {
+        disconnect();
         mUdpChannel = DatagramChannel.open();
         return mUdpChannel.socket();
     }

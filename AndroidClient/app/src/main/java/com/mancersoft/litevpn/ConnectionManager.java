@@ -39,14 +39,14 @@ class ConnectionManager {
         mService = vpnService;
     }
 
-    IVpnTransport createTransport(TransportType transportType, Object... transportParams) {
+    IVpnTransport createTransport(TransportType transportType, String... transportParams) {
         switch (transportType) {
             case WEBSOCKET:
-                return new WebSocketTransport((String) transportParams[0]);
+                return new WebSocketTransport(transportParams[0]);
             case TELEGRAM:
                 return new TelegramTransport();
             default:
-                return new UdpTransport((String) transportParams[0], (int) transportParams[1]);
+                return new UdpTransport(transportParams[0], Integer.parseInt(transportParams[1]));
         }
     }
 

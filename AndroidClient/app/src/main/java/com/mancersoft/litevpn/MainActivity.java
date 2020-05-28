@@ -10,6 +10,8 @@ import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.mancersoft.litevpn.transport.TransportType;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
@@ -18,11 +20,10 @@ import java.util.stream.Collectors;
 public class MainActivity extends Activity {
     public interface Prefs {
         String NAME = "connection";
-        String SERVER_ADDRESS = "server.address";
-        String SERVER_PORT = "server.port";
+        String SERVER_ID = "server.id";
+        String SERVER_PARAMS = "server.params";
+        String VPN_TYPE = "vpn.type";
         String SHARED_SECRET = "shared.secret";
-        String PROXY_HOSTNAME = "proxyhost";
-        String PROXY_PORT = "proxyport";
         String ALLOW = "allow";
         String PACKAGES = "packages";
     }
@@ -35,34 +36,33 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        final TextView serverAddress = findViewById(R.id.address);
-        final TextView serverPort = findViewById(R.id.port);
+        final TextView serverId = findViewById(R.id.serverId);
+        final TextView params = findViewById(R.id.params);
         final TextView sharedSecret = findViewById(R.id.secret);
-        final TextView proxyHost = findViewById(R.id.proxyhost);
-        final TextView proxyPort = findViewById(R.id.proxyport);
 
         final RadioButton allowed = findViewById(R.id.allowed);
+        final RadioButton disallowed = findViewById(R.id.disallowed);
         final TextView packages = findViewById(R.id.packages);
+        final RadioButton vpnTypeUdp = findViewById(R.id.udp);
+        final RadioButton vpnTypeWebsocket = findViewById(R.id.websocket);
+        final RadioButton vpnTypeTelegram = findViewById(R.id.telegram);
 
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
-        serverAddress.setText(prefs.getString(Prefs.SERVER_ADDRESS, ""));
-        int serverPortPrefValue = prefs.getInt(Prefs.SERVER_PORT, 0);
-        serverPort.setText(String.valueOf(serverPortPrefValue == 0 ? "" : serverPortPrefValue));
-        sharedSecret.setText(prefs.getString(Prefs.SHARED_SECRET, ""));
-        proxyHost.setText(prefs.getString(Prefs.PROXY_HOSTNAME, ""));
-        int proxyPortPrefValue = prefs.getInt(Prefs.PROXY_PORT, 0);
-        proxyPort.setText(proxyPortPrefValue == 0 ? "" : String.valueOf(proxyPortPrefValue));
+        serverId.setText(prefs.getString(Prefs.SERVER_ID, ""));
+        params.setText(prefs.getString(Prefs.SERVER_PARAMS, ""));
 
+        final String vpnType = prefs.getString(Prefs.VPN_TYPE, TransportType.UDP.toString());
+        vpnTypeUdp.setChecked(vpnType.equals(TransportType.UDP.toString()));
+        vpnTypeWebsocket.setChecked(vpnType.equals(TransportType.WEBSOCKET.toString()));
+        vpnTypeTelegram.setChecked(vpnType.equals(TransportType.TELEGRAM.toString()));
+
+        sharedSecret.setText(prefs.getString(Prefs.SHARED_SECRET, ""));
         allowed.setChecked(prefs.getBoolean(Prefs.ALLOW, true));
+        disallowed.setChecked(!allowed.isChecked());
         packages.setText(String.join(", ", prefs.getStringSet(
                 Prefs.PACKAGES, Collections.emptySet())));
 
         findViewById(R.id.connect).setOnClickListener(v -> {
-            if (!checkProxyConfigs(proxyHost.getText().toString(),
-                    proxyPort.getText().toString())) {
-                return;
-            }
-
             final Set<String> packageSet =
                     Arrays.stream(packages.getText().toString().split(","))
                             .map(String::trim)
@@ -72,24 +72,20 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            int serverPortNum;
-            try {
-                serverPortNum = Integer.parseInt(serverPort.getText().toString());
-            } catch (NumberFormatException e) {
-                serverPortNum = 0;
+            String newVpnType;
+            if (vpnTypeUdp.isChecked()) {
+                newVpnType = TransportType.UDP.toString();
+            } else if (vpnTypeWebsocket.isChecked()) {
+                newVpnType = TransportType.WEBSOCKET.toString();
+            } else {
+                newVpnType = TransportType.TELEGRAM.toString();
             }
-            int proxyPortNum;
-            try {
-                proxyPortNum = Integer.parseInt(proxyPort.getText().toString());
-            } catch (NumberFormatException e) {
-                proxyPortNum = 0;
-            }
+
             prefs.edit()
-                    .putString(Prefs.SERVER_ADDRESS, serverAddress.getText().toString())
-                    .putInt(Prefs.SERVER_PORT, serverPortNum)
+                    .putString(Prefs.SERVER_ID, serverId.getText().toString())
+                    .putString(Prefs.SERVER_PARAMS, params.getText().toString())
+                    .putString(Prefs.VPN_TYPE, newVpnType)
                     .putString(Prefs.SHARED_SECRET, sharedSecret.getText().toString())
-                    .putString(Prefs.PROXY_HOSTNAME, proxyHost.getText().toString())
-                    .putInt(Prefs.PROXY_PORT, proxyPortNum)
                     .putBoolean(Prefs.ALLOW, allowed.isChecked())
                     .putStringSet(Prefs.PACKAGES, packageSet)
                     .commit();
@@ -102,14 +98,6 @@ public class MainActivity extends Activity {
             }
         });
         findViewById(R.id.disconnect).setOnClickListener(v -> startService(getServiceIntent().setAction(LiteVpnService.ACTION_DISCONNECT)));
-    }
-
-    private boolean checkProxyConfigs(String proxyHost, String proxyPort) {
-        final boolean hasIncompleteProxyConfigs = proxyHost.isEmpty() != proxyPort.isEmpty();
-        if (hasIncompleteProxyConfigs) {
-            Toast.makeText(this, R.string.incomplete_proxy_settings, Toast.LENGTH_SHORT).show();
-        }
-        return !hasIncompleteProxyConfigs;
     }
 
     private boolean checkPackages(Set<String> packageNames) {

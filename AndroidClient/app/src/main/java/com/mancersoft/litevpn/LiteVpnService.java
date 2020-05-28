@@ -9,12 +9,15 @@ import android.content.SharedPreferences;
 import android.net.VpnService;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.mancersoft.litevpn.transport.TransportType;
 
 import java.util.Collections;
 import java.util.Set;
+
+import static com.mancersoft.litevpn.VpnManager.TAG;
 
 public class LiteVpnService extends VpnService implements Handler.Callback {
 
@@ -66,37 +69,48 @@ public class LiteVpnService extends VpnService implements Handler.Callback {
         mHandler.sendEmptyMessage(R.string.connecting);
 
         final SharedPreferences prefs = getSharedPreferences(MainActivity.Prefs.NAME, MODE_PRIVATE);
-        final String server = prefs.getString(MainActivity.Prefs.SERVER_ADDRESS, "");
+        final String serverId = prefs.getString(MainActivity.Prefs.SERVER_ID, "").trim();
+        final String[] serverParams = prefs.getString(MainActivity.Prefs.SERVER_PARAMS, "").split(",");
+        for (int i = 0; i < serverParams.length; ++i) {
+            serverParams[i] = serverParams[i].trim();
+        }
+
+        final TransportType vpnType = Enum.valueOf(TransportType.class,
+                prefs.getString(MainActivity.Prefs.VPN_TYPE, TransportType.UDP.toString()));
         final String secret = prefs.getString(MainActivity.Prefs.SHARED_SECRET, "");
         final boolean allow = prefs.getBoolean(MainActivity.Prefs.ALLOW, true);
         final Set<String> packages =
                 prefs.getStringSet(MainActivity.Prefs.PACKAGES, Collections.emptySet());
-        final int port = prefs.getInt(MainActivity.Prefs.SERVER_PORT, 0);
-        final String proxyHost = prefs.getString(MainActivity.Prefs.PROXY_HOSTNAME, "");
-        final int proxyPort = prefs.getInt(MainActivity.Prefs.PROXY_PORT, 0);
 
         if (mVpnManager != null) {
             mVpnManager.disconnect(false);
         }
 
-
-        mVpnManager = new VpnManager(this, server, TransportType.UDP, secret,
-                proxyHost, proxyPort, allow, packages, mConfigureIntent, port);
-        mVpnManager.setOnConnectionChangedListener((isConnected) ->
-        {
-            if (isConnected) {
-                mHandler.sendEmptyMessage(R.string.connected);
-            } else {
-                disconnect();
-            }
-        });
-        mVpnManager.connect();
+        try {
+            mVpnManager = new VpnManager(this, serverId, vpnType, secret,
+                    allow, packages, mConfigureIntent, serverParams);
+            mVpnManager.setOnConnectionChangedListener((isConnected) ->
+            {
+                if (isConnected) {
+                    mHandler.sendEmptyMessage(R.string.connected);
+                } else {
+                    disconnect();
+                }
+            });
+            mVpnManager.connect();
+        } catch (Exception e) {
+            Log.e(TAG, "LiteVpnService connect error", e);
+            disconnect();
+        }
     }
 
     private void disconnect() {
         mHandler.sendEmptyMessage(R.string.disconnected);
-        mVpnManager.disconnect(false);
-        stopForeground(true);
+        if (mVpnManager != null) {
+            mVpnManager.disconnect(false);
+        }
+
+        new Handler(this.getMainLooper()).postDelayed(() -> stopForeground(true), 100);
     }
 
     private void updateForegroundNotification(final int message) {

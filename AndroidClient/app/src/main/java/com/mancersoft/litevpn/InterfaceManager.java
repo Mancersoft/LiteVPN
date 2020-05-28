@@ -2,11 +2,8 @@ package com.mancersoft.litevpn;
 
 import android.app.PendingIntent;
 import android.content.pm.PackageManager;
-import android.net.ProxyInfo;
 import android.net.VpnService;
-import android.os.Build;
 import android.os.ParcelFileDescriptor;
-import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.FileInputStream;
@@ -37,8 +34,7 @@ class InterfaceManager {
     }
 
     void init(final ConnectionParams params, final VpnService service, final String serverName,
-              final PendingIntent configureIntent, final String proxyHostName,
-              final int proxyHostPort, final boolean allowPackages, final Set<String> packages) {
+              final PendingIntent configureIntent, final boolean allowPackages, final Set<String> packages) {
         VpnService.Builder builder = service.new Builder();
         builder.setMtu(params.getMtu());
         builder.addAddress(params.getAddress(), params.getAddressPrefixLength());
@@ -61,11 +57,6 @@ class InterfaceManager {
         }
 
         builder.setSession(serverName).setConfigureIntent(configureIntent);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (!TextUtils.isEmpty(proxyHostName)) {
-                builder.setHttpProxy(ProxyInfo.buildDirectProxy(proxyHostName, proxyHostPort));
-            }
-        }
 
         builder.setBlocking(true);
         builder.setConfigureIntent(configureIntent);

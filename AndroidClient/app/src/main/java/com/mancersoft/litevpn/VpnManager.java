@@ -2,7 +2,6 @@ package com.mancersoft.litevpn;
 
 import android.app.PendingIntent;
 import android.net.VpnService;
-import android.text.TextUtils;
 import android.util.Log;
 
 import com.mancersoft.litevpn.transport.IVpnTransport;
@@ -34,9 +33,6 @@ public class VpnManager {
     private final PendingIntent mConfigureIntent;
     private OnConnectionChangedListener mOnConnectionChangedListener;
 
-    private String mProxyHostName;
-    private int mProxyHostPort;
-
     private final boolean mAllowPackages;
     private final Set<String> mPackages;
 
@@ -52,16 +48,10 @@ public class VpnManager {
 
     VpnManager(final VpnService service, final String serverName,
                TransportType transportType, String sharedSecret,
-               final String proxyHostName, final int proxyHostPort,
                boolean allowPackages, final Set<String> packages, PendingIntent intent,
-               Object... transportParams) {
+               String... transportParams) {
         mService = service;
         mServerName = serverName;
-
-        if (!TextUtils.isEmpty(proxyHostName)) {
-            mProxyHostName = proxyHostName;
-            mProxyHostPort = proxyHostPort;
-        }
 
         mAllowPackages = allowPackages;
         mPackages = packages;
@@ -69,7 +59,7 @@ public class VpnManager {
         mIface = InterfaceManager.getInstance();
         mConnManager = new ConnectionManager(sharedSecret, service);
 
-        Object[] fullTransportParams = new Object[transportParams.length + 1];
+        String[] fullTransportParams = new String[transportParams.length + 1];
         fullTransportParams[0] = serverName;
         System.arraycopy(transportParams, 0, fullTransportParams, 1, transportParams.length);
         mTransport = mConnManager.createTransport(transportType, fullTransportParams);
@@ -98,6 +88,7 @@ public class VpnManager {
                 throw new Exception("Cannot protect the tunnel");
             }
 
+            mTransport.setOnClosedListener(this::connectionClosedProcessing);
             mTransport.connect().thenAccept((isConnected) -> {
                 if (!isConnected) {
                     disconnect(true);
@@ -107,17 +98,16 @@ public class VpnManager {
                 mConnManager.sendConnectQuery(mTransport).thenAccept((params) -> {
                     mIsConnected.set(true);
                     mIface.init(params, mService, mServerName, mConfigureIntent,
-                            mProxyHostName, mProxyHostPort, mAllowPackages, mPackages);
+                            mAllowPackages, mPackages);
 
                     mTransport.setOnMessageListener(this::internetToUserProcessing);
-                    mTransport.setOnClosedListener(this::connectionClosedProcessing);
                     mUserToInternetProcessing =
                             mExecutorService.submit(this::userToInternetProcessing);
                     invokeOnConnectionChanged(true);
                 });
             });
         } catch (Exception e) {
-            Log.e(TAG, "Connection failed, exiting", e);
+            Log.e(TAG, "VPNManager connect error", e);
             disconnect(true);
         }
     }
@@ -189,7 +179,7 @@ public class VpnManager {
         try {
             mIface.close();
         } catch (Exception e) {
-            Log.e(TAG, "Unable to close interface", e);
+            Log.e(TAG, "VPNManager disconnect error", e);
         }
 
         mIsConnected.set(false);
