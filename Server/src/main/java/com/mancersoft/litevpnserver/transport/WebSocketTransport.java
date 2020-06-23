@@ -1,5 +1,6 @@
 package com.mancersoft.litevpnserver.transport;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mancersoft.litevpnserver.VpnManager;
@@ -60,9 +61,9 @@ public class WebSocketTransport implements IVpnTransport {
 
     @Override
     public void sendAsync(Packet packet) {
-        var encoded = Base64.getEncoder().encode(ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
+        ByteBuffer encoded = Base64.getEncoder().encode(ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
         String dataString = new String(encoded.array(), StandardCharsets.ISO_8859_1);
-        var jObj = new JsonObject();
+        JsonObject jObj = new JsonObject();
         jObj.addProperty("to", packet.getDestination().toString());
         jObj.addProperty("data", dataString);
         mWebSocketClient.sendAsync(jObj.toString());
@@ -94,7 +95,7 @@ public class WebSocketTransport implements IVpnTransport {
         @Override
         public void onOpen(ServerHandshake handshakeData) {
             Log.d(TAG, "WebSocketTransport onOpen");
-            var jObj = new JsonObject();
+            JsonObject jObj = new JsonObject();
             jObj.addProperty("auth", mServerId);
             jObj.addProperty("passwd", UUID.randomUUID().toString());
             sendAsync(jObj.toString());
@@ -103,15 +104,15 @@ public class WebSocketTransport implements IVpnTransport {
         public void onMessage(String message) {
             try {
 
-                var jObj = JsonParser.parseString(message).getAsJsonObject();
-                var auth = jObj.get("auth");
+                JsonObject jObj = JsonParser.parseString(message).getAsJsonObject();
+                JsonElement auth = jObj.get("auth");
                 if (auth != null) {
                     mConnectResult.complete(auth.getAsString().toLowerCase().equals("ok"));
                     return;
                 }
 
                 String dataString = jObj.get("data").getAsString();
-                var packet = new Packet();
+                Packet packet = new Packet();
                 byte[] data = Base64.getDecoder().decode(dataString);
                 if (data.length > VpnManager.MAX_PACKET_SIZE) {
                     throw new Exception("Oversized packet received");

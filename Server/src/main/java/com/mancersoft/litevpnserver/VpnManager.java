@@ -75,7 +75,7 @@ public class VpnManager {
     private void internetToUserProcessing() {
         try {
             byte[] data = new byte[VpnManager.MAX_PACKET_SIZE];
-            var packet = new Packet();
+            Packet packet = new Packet();
             packet.setData(data);
             while (!Thread.currentThread().isInterrupted()) {
                 //System.out.println("Start read iface");
@@ -113,7 +113,7 @@ public class VpnManager {
                 }
 
                 switch (data[PACKET_TYPE_BYTE_OFFSET]) {
-                    case CONNECT_PACKET -> {
+                    case CONNECT_PACKET:
                         if (mReceiveConnections.get()) {
                             Object packetSource = packet.getSource();
                             if (mConectionToIp.containsKey(packetSource)) {
@@ -129,15 +129,13 @@ public class VpnManager {
                         }
 
                         return;
-                    }
-                    case DISCONNECT_PACKET -> {
+                    case DISCONNECT_PACKET:
                         Object packetSource = packet.getSource();
                         if (mConectionToIp.containsKey(packetSource)) {
                             mIpToConnection.asMap().remove(mConectionToIp.get(packetSource));
                         }
 
                         return;
-                    }
                 }
 
                 String ipAddress = Utils.getSourceIp(data);

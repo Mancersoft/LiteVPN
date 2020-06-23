@@ -2,6 +2,7 @@ package com.mancersoft.litevpnserver;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import kotlin.Pair;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -91,7 +92,7 @@ public class NatManager {
             }
 
             String currentIpPort = mExternPortToIpPort.asMap().get(port);
-            var ipPortPair = Utils.parseIpPort(currentIpPort);
+            Pair<String, Short> ipPortPair = Utils.parseIpPort(currentIpPort);
             Utils.changeIpPort(packet, ipPortPair.getFirst(), ipPortPair.getSecond(), false);
             return true;
         } catch (Exception e) {
@@ -101,7 +102,7 @@ public class NatManager {
     }
 
     public void clearDisconnectedPorts(String ipAddress) {
-        var externalPortsList = mIpToExternPorts.remove(ipAddress);
+        Set<Short> externalPortsList = mIpToExternPorts.remove(ipAddress);
         if (externalPortsList != null) {
             for (short port : externalPortsList) {
                 mExternPortToIpPort.asMap().remove(port);

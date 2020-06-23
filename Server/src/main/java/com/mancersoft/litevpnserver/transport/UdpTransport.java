@@ -38,13 +38,13 @@ public class UdpTransport implements IVpnTransport {
 
     @Override
     public CompletableFuture<Boolean> start() {
-        var result = new CompletableFuture<Boolean>();
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
         try {
             stop();
             mUdpChannel = DatagramChannel.open(StandardProtocolFamily.INET6);
             mUdpChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
             mUdpChannel.configureBlocking(true);
-            var address = new InetSocketAddress(mPort);
+            InetSocketAddress address = new InetSocketAddress(mPort);
             mUdpChannel.bind(address);
             mIncomingMessageProcessing = mExecutorService.submit(this::incomingMessagesProcessing);
         } catch (Exception e) {
@@ -74,10 +74,10 @@ public class UdpTransport implements IVpnTransport {
 
     @Override
     public void sendAsync(Packet packetToSend) {
-        var packet = new Packet(packetToSend);
+        Packet packet = new Packet(packetToSend);
         mExecutorService.execute(() -> {
             try {
-                var buffer = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
+                ByteBuffer buffer = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
                 mUdpChannel.send(buffer, (SocketAddress) packet.getDestination());
             } catch (Exception e) {
                 Log.e(TAG, "UdpTransport sendAsync error", e);
@@ -92,7 +92,7 @@ public class UdpTransport implements IVpnTransport {
 
     private void incomingMessagesProcessing() {
         try {
-            var packet = new Packet();
+            Packet packet = new Packet();
             packet.setData(new byte[VpnManager.MAX_PACKET_SIZE]);
             while (!Thread.currentThread().isInterrupted()) {
                 //System.out.println("Start receive transport");
@@ -115,7 +115,7 @@ public class UdpTransport implements IVpnTransport {
 
     private void receive(Packet packet) {
         try {
-            var buffer = ByteBuffer.wrap(packet.getData());
+            ByteBuffer buffer = ByteBuffer.wrap(packet.getData());
             packet.setSource(mUdpChannel.receive(buffer));
             packet.setLength(buffer.position());
         } catch (Exception e) {

@@ -1,0 +1,6 @@
+FROM gradle:6.5.0-jdk8 AS build
+RUN apt-get update && \
+    apt-get -y install gcc g++
+COPY --chown=gradle:gradle . /home/gradle/src
+WORKDIR /home/gradle/src
+RUN gradle build --no-daemon

@@ -46,11 +46,14 @@ public class ConnectionManager {
     }
 
     public IVpnTransport createTransport(TransportType transportType, String... transportParams) {
-        return switch (transportType) {
-            case WEBSOCKET -> new WebSocketTransport(transportParams[0]);
-            case TELEGRAM -> new TelegramTransport();
-            default -> new UdpTransport(Integer.parseInt(transportParams[0]));
-        };
+        switch (transportType) {
+            case WEBSOCKET:
+                return new WebSocketTransport(transportParams[0]);
+            case TELEGRAM:
+                return new TelegramTransport();
+            default:
+                return new UdpTransport(Integer.parseInt(transportParams[0]));
+        }
     }
 
     private boolean checkSecret(Packet packet) {
@@ -73,7 +76,7 @@ public class ConnectionManager {
             }
 
             parameters[PACKET_TYPE_BYTE_OFFSET] = CONNECT_PACKET;
-            var paramPacket = new Packet();
+            Packet paramPacket = new Packet();
             paramPacket.setData(parameters);
             paramPacket.setLength(parameters.length);
             paramPacket.setDestination(userDest);

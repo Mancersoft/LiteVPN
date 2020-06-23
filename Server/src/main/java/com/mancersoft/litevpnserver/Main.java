@@ -29,11 +29,20 @@ public class Main {
     private static final int UDP_PORT = 8000;
     private static final String WEB_SOCKET_SERVER_ID = "ServerLiteVPN";
 
+    private static void loadJniLib(String filename) {
+        try {
+            System.load(System.getProperty("user.dir") + "/" + filename);
+        } catch (java.lang.UnsatisfiedLinkError ignore) {
+        }
+    }
+
     static {
         try {
             System.loadLibrary("tun");
         } catch (java.lang.UnsatisfiedLinkError ignore) {
-            System.load(System.getProperty("user.dir") + "/build/libs/tun/shared/libtun.so");
+            loadJniLib("build/libs/tun/shared/libtun.so");
+            loadJniLib("tun/shared/libtun.so");
+            loadJniLib("libtun.so");
         }
     }
 
@@ -42,16 +51,16 @@ public class Main {
             String sudoPassword = "kali";
             String sharedSecret = "test";
 
-            var iface = InterfaceManager.getInstance();
+            InterfaceManager iface = InterfaceManager.getInstance();
             iface.init(sudoPassword, INTERNET_INTERFACE, TUNNEL_INTERFACE,
                     VPN_NETWORK, VPN_NETWORK_PREFIX,
                     VPN_TUN_SOURCE, VPN_TUN_DEST);
-            var connMan = ConnectionManager.getInstance();
+            ConnectionManager connMan = ConnectionManager.getInstance();
             connMan.init(MTU, ROUTE, ROUTE_PREFIX_LENGTH, DNS_SERVER, SEARCH_DOMAIN,
                     FIRST_CLIENT_IP, sharedSecret);
-            var natMan = NatManager.getInstance();
+            NatManager natMan = NatManager.getInstance();
             natMan.init(VPN_TUN_DEST);
-            var vpnMan = VpnManager.getInstance();
+            VpnManager vpnMan = VpnManager.getInstance();
             //IVpnTransport transport = connMan.createTransport(TransportType.UDP, Integer.toString(UDP_PORT));
             IVpnTransport transport = connMan.createTransport(TransportType.WEBSOCKET, WEB_SOCKET_SERVER_ID);
             vpnMan.init(transport);
@@ -60,14 +69,25 @@ public class Main {
             System.out.println("Server started!");
             vpnMan.startProcessConnections();
 
-            var scanner = new Scanner(System.in);
+            Scanner scanner = new Scanner(System.in);
             String cmd = scanner.nextLine();
             while (!cmd.equals("exit")) {
                 switch (cmd) {
-                    case "startReceiveConnections" -> vpnMan.setReceiveConnections(true);
-                    case "stopReceiveConnections" -> vpnMan.setReceiveConnections(false);
-                    case "startProcessConnections" -> vpnMan.startProcessConnections();
-                    case "stopProcessConnections" -> vpnMan.stopProcessConnections();
+                    case "startReceiveConnections":
+                        vpnMan.setReceiveConnections(true);
+                        break;
+                    case "stopReceiveConnections":
+                        vpnMan.setReceiveConnections(false);
+                        break;
+                    case "startProcessConnections":
+                        vpnMan.startProcessConnections();
+                        break;
+                    case "stopProcessConnections":
+                        vpnMan.stopProcessConnections();
+                        break;
+                    default:
+                        System.out.println("Command not found");
+                        break;
                 }
 
                 cmd = scanner.nextLine();

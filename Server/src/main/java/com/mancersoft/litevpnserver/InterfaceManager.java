@@ -35,7 +35,7 @@ public class InterfaceManager {
             theUnsafe.setAccessible(true);
             Unsafe u = (Unsafe) theUnsafe.get(null);
 
-            var cls = Class.forName("jdk.internal.module.IllegalAccessLogger");
+            Class<?> cls = Class.forName("jdk.internal.module.IllegalAccessLogger");
             Field logger = cls.getDeclaredField("logger");
             u.putObjectVolatile(cls, u.staticFieldOffset(logger), null);
         } catch (Exception ignored) {

@@ -1,0 +1,4 @@
+FROM ubuntu:16.04
+RUN apt-get update && \
+    apt-get -y install net-tools iproute2 iptables openjdk-8-jre-headless
+RUN mkdir /app
