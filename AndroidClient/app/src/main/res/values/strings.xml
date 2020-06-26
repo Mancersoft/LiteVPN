@@ -8,7 +8,6 @@
     <string name="vpn_type">Vpn type:</string>
     <string name="udp">UDP</string>
     <string name="websocket">WebSocket</string>
-    <string name="telegram">Telegram</string>
     <string name="connect">Connect!</string>
     <string name="disconnect">Disconnect!</string>
 

@@ -32,11 +32,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/websocket"/>
-            <RadioButton
-                android:id="@+id/telegram"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/telegram"/>
         </RadioGroup>
 
         <TextView android:labelFor="@+id/packages" style="@style/item" android:text="@string/packages"/>
