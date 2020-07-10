@@ -24,7 +24,12 @@ class UdpTransport(private val mPort: Int) : IVpnTransport {
         val result = CompletableFuture<Boolean>()
         try {
             stop()
-            mUdpChannel = DatagramChannel.open(StandardProtocolFamily.INET6)
+            mUdpChannel = try {
+                DatagramChannel.open(StandardProtocolFamily.INET6)
+            } catch (e: UnsupportedOperationException) {
+                DatagramChannel.open(StandardProtocolFamily.INET)
+            }
+
             mUdpChannel!!.setOption(StandardSocketOptions.SO_REUSEADDR, true)
             mUdpChannel!!.configureBlocking(true)
             val address = InetSocketAddress(mPort)

@@ -21,6 +21,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation("com.google.guava:guava:29.0-jre")
     implementation 'co.trikita:log:1.1.5'
+    implementation 'commons-cli:commons-cli:1.3.1'
 
     implementation "org.java-websocket:Java-WebSocket:1.5.1"
     implementation 'com.google.code.gson:gson:2.8.6'

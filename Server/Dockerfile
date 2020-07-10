@@ -6,4 +6,4 @@ FROM lite-vpn-server:latest
 COPY --from=build /home/gradle/src/build/libs/*.jar /app/lite-vpn-server.jar
 COPY --from=build /home/gradle/src/build/libs/tun /app/tun
 WORKDIR /app
-ENTRYPOINT ["java","-jar","/app/lite-vpn-server.jar"]
+ENTRYPOINT java -jar /app/lite-vpn-server.jar -s test -i eth0 -v UDP -p 8000

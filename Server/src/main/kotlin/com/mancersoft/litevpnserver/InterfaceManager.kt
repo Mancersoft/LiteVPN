@@ -26,13 +26,13 @@ object InterfaceManager {
     }
 
     @Throws(Exception::class)
-    fun init(password: String, networkIface: String, tunnelIface: String,
+    fun init(password: String?, networkIface: String, tunnelIface: String,
              vpnNetwork: String, vpnNetworkPrefix: Byte,
              vpnTunnelSource: String, vpnTunnelDestination: String) {
         disableWarning()
         val cmd = arrayOf("/bin/bash",
                 "-c",
-                "echo $password| sudo -S " +
+                if (password != null) "echo $password| sudo -S " else "" +
                         "echo 1 > /proc/sys/net/ipv4/ip_forward ; " +
                         "iptables -t nat -A POSTROUTING -s $vpnNetwork/$vpnNetworkPrefix -o $networkIface -j MASQUERADE ; " +
                         "ip tuntap add dev $tunnelIface mode tun ; " +
