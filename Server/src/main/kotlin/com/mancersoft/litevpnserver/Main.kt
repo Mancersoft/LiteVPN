@@ -3,6 +3,7 @@ package com.mancersoft.litevpnserver
 import com.mancersoft.litevpnserver.transport.TransportType
 import org.apache.commons.cli.*
 import trikita.log.Log
+import java.net.URLDecoder
 import java.util.*
 import kotlin.system.exitProcess
 
@@ -25,7 +26,10 @@ object Main {
 
     private fun loadJniLib(filename: String) {
         try {
-            System.load(System.getProperty("user.dir") + "/" + filename)
+            val path: String =
+                    URLDecoder.decode(Main::class.java.protectionDomain.codeSource.location.path, "UTF-8")
+                            .substringBeforeLast("/", "")
+            System.load("$path/$filename")
         } catch (ignore: UnsatisfiedLinkError) {
         }
     }
@@ -36,6 +40,7 @@ object Main {
         } catch (ignore: UnsatisfiedLinkError) {
             loadJniLib("build/libs/tun/shared/libtun.so")
             loadJniLib("tun/shared/libtun.so")
+            loadJniLib("tun/libtun.so")
             loadJniLib("libtun.so")
         }
     }

@@ -1,0 +1,10 @@
+FROM lite-vpn-build:latest AS build
+COPY --chown=gradle:gradle . /home/gradle/src
+WORKDIR /home/gradle/src
+RUN gradle build --no-daemon
+RUN mkdir -p /app && \
+    cp -r /home/gradle/src/build/libs/*.jar /app/lite-vpn-server.jar && \
+    cp -r /home/gradle/src/build/libs/tun /app/tun
+RUN gcloud auth activate-service-account --key-file=google-vm-key.json
+RUN gcloud compute ssh --zone "europe-west4-a" "vpn-server" --project "fabled-plating-282621" --command="sudo mkdir -p /app"
+RUN gcloud compute scp --project="fabled-plating-282621" --recurse /app/* vpn-server:/app --zone=europe-west4-a

@@ -74,7 +74,3 @@ model {
 shadowJar {
     classifier ''
 }
-
-run {
-    systemProperty "java.library.path", file("${buildDir}/libs/tun/shared").absolutePath
-}

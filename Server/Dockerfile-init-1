@@ -1,6 +1,10 @@
 FROM gradle:6.5.0-jdk8 AS build
-RUN apt-get update && \
-    apt-get -y install gcc g++
+RUN apt-get update -y && apt-get install -y gnupg2
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
+    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+RUN apt-get update -y && apt-get -y install google-cloud-sdk gcc g++
 COPY --chown=gradle:gradle . /home/gradle/src
 WORKDIR /home/gradle/src
 RUN gradle build --no-daemon
