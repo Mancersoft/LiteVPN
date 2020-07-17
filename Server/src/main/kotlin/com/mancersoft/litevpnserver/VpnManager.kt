@@ -100,14 +100,16 @@ object VpnManager {
                     CONNECT_PACKET -> {
                         if (mReceiveConnections.get()) {
                             val packetSource = packet.source
-                            if (mConectionToIp.containsKey(packetSource)) {
-                                mConnManager.processConnection(mTransport, packet, mConectionToIp[packetSource])
-                                return@execute
-                            }
-                            val assignedIp = mConnManager.processConnection(mTransport, packet, null)
-                            if (assignedIp != null) {
-                                mIpToConnection.put(assignedIp, packetSource!!)
-                                mConectionToIp[packetSource] = assignedIp
+                            synchronized(this) {
+                                if (mConectionToIp.containsKey(packetSource)) {
+                                    mConnManager.processConnection(mTransport, packet, mConectionToIp[packetSource])
+                                    return@execute
+                                }
+                                val assignedIp = mConnManager.processConnection(mTransport, packet, null)
+                                if (assignedIp != null) {
+                                    mIpToConnection.put(assignedIp, packetSource!!)
+                                    mConectionToIp[packetSource] = assignedIp
+                                }
                             }
                         }
                         return@execute

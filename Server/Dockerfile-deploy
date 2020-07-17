@@ -6,5 +6,6 @@ RUN mkdir -p /app && \
     cp -r /home/gradle/src/build/libs/*.jar /app/lite-vpn-server.jar && \
     cp -r /home/gradle/src/build/libs/tun /app/tun
 RUN gcloud auth activate-service-account --key-file=google-vm-key.json
-RUN gcloud compute ssh --zone "europe-west4-a" "vpn-server" --project "fabled-plating-282621" --command="sudo mkdir -p /app"
+RUN gcloud compute ssh --zone "europe-west4-a" "vpn-server" --project "fabled-plating-282621" --command="sudo mkdir -p /app ; sudo supervisorctl stop vpn_server"
 RUN gcloud compute scp --project="fabled-plating-282621" --recurse /app/* vpn-server:/app --zone=europe-west4-a
+RUN gcloud compute ssh --zone "europe-west4-a" "vpn-server" --project "fabled-plating-282621" --command="sudo supervisorctl start vpn_server"

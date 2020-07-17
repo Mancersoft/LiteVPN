@@ -84,9 +84,9 @@ object ConnectionManager {
             if (ipAddress == null) {
                 occupiedIps.add(integerIp!!)
                 clientIpAddress++
+                Log.d("User connected, ip: $newIp!")
             }
 
-            Log.d("User connected, ip: $newIp!")
             return newIp
         }
         return null
