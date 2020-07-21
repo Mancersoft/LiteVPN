@@ -7,6 +7,7 @@ import java.net.SocketAddress
 import java.net.StandardProtocolFamily
 import java.net.StandardSocketOptions
 import java.nio.ByteBuffer
+import java.nio.channels.ClosedByInterruptException
 import java.nio.channels.DatagramChannel
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -95,6 +96,8 @@ class UdpTransport(private val mPort: Int) : IVpnTransport {
             val buffer = ByteBuffer.wrap(packet.data)
             packet.source = mUdpChannel!!.receive(buffer)
             packet.length = buffer.position()
+        } catch (ignored: ClosedByInterruptException) {
+            Log.d(VpnManager.TAG, "UdpTransport receive interrupted")
         } catch (e: Exception) {
             Log.e(VpnManager.TAG, "UdpTransport receive error", e)
         }

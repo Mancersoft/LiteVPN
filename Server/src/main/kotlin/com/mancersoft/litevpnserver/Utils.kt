@@ -138,18 +138,15 @@ object Utils {
                 ipAddress and 0xFF)
     }
 
-    fun firstMissing(set: NavigableSet<Int>): Int? {
+    fun firstMissingOrNext(set: NavigableSet<Int>): Int {
         var fullSet = set
-        if (fullSet.size <= 1) {
-            return null
-        }
-        var first = fullSet.first()
+        var first = fullSet.first()!!
         var last = fullSet.last()!!
-        if (fullSet.size == last - first!! + 1) {
-            return null
+        if (fullSet.size == last - first + 1) {
+            return last + 1
         }
         while (true) {
-            val middle = first!! + last ushr 1
+            val middle = first + last ushr 1
             val sub = fullSet.headSet(middle, false)
             if (sub.size < middle - first) {
                 fullSet = sub
