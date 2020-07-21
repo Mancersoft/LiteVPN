@@ -3,21 +3,23 @@ package com.mancersoft.litevpnserver
 import com.mancersoft.litevpnserver.transport.*
 import trikita.log.Log
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 object ConnectionManager {
-    private const val SHARED_SECRET_OFFSET = 1
     private const val NOT_RELIABLE_SEND_PARAMS_COUNT = 3
 
     private lateinit var mParams: ConnectionParams
-    private var clientIpAddress = 0
+    private var firstClientIpInt = 0
     private val occupiedIps = TreeSet<Int>()
     private lateinit var mSharedSecret: String
+
+    private val mGroupIdToIp = ConcurrentHashMap<String, String>()
 
     fun init(mtu: Short, addressPrefixLength: Byte, route: String, routePrefixLength: Byte,
              dnsServer: String?, searchDomain: String?, firstClientIp: String,
              sharedSecret: String) {
         mSharedSecret = sharedSecret
-        clientIpAddress = Utils.ipToInt(firstClientIp)
+        firstClientIpInt = Utils.ipToInt(firstClientIp)
         mParams = ConnectionParams()
         mParams.mtu = mtu
         mParams.addressPrefixLength = addressPrefixLength
@@ -31,17 +33,6 @@ object ConnectionManager {
         return when (transportType) {
             TransportType.WEBSOCKET -> WebSocketTransport(transportParams[0])
             else -> UdpTransport(transportParams[0].toInt())
-        }
-    }
-
-    private fun checkSecret(packet: Packet): Boolean {
-        return try {
-            val receivedSecret = String(packet.data, SHARED_SECRET_OFFSET,
-                    packet.length - SHARED_SECRET_OFFSET)
-            mSharedSecret == receivedSecret
-        } catch (e: Exception) {
-            Log.e(VpnManager.TAG, "ConnectionManager checkSecret error", e)
-            false
         }
     }
 
@@ -68,33 +59,47 @@ object ConnectionManager {
         }
     }
 
-    fun processConnection(transport: IVpnTransport, packet: Packet, ipAddress: String?): String? {
-        var newIp = ipAddress
-        var integerIp: Int? = null
-        if (ipAddress == null) {
-            integerIp = Utils.firstMissing(occupiedIps)
-            if (integerIp == null) {
-                integerIp = clientIpAddress
-            }
-            newIp = Utils.intIpToString(integerIp)
-        }
-
-        //newIp = "10.255.255.255";
-        if (checkSecret(packet) && sendParams(transport, newIp!!, packet.source!!)) {
-            if (ipAddress == null) {
-                occupiedIps.add(integerIp!!)
-                clientIpAddress++
-                Log.d("User connected, ip: $newIp!")
+    fun processConnection(transport: IVpnTransport, connectData: ConnectData): User? {
+        try {
+            if (mSharedSecret != connectData.secret) {
+                return null
             }
 
-            return newIp
+            lateinit var newIp: String
+            var integerIp: Int? = null
+            val hasIp = mGroupIdToIp.containsKey(connectData.groupId)
+            if (hasIp) {
+                newIp = mGroupIdToIp[connectData.groupId]!!
+            } else {
+                integerIp = if (occupiedIps.isEmpty()) {
+                    firstClientIpInt
+                } else {
+                    Utils.firstMissingOrNext(occupiedIps)
+                }
+                newIp = Utils.intIpToString(integerIp)
+            }
+
+            //newIp = "10.255.255.255";
+            if (sendParams(transport, newIp, connectData.source)) {
+                if (!hasIp) {
+                    occupiedIps.add(integerIp!!)
+                    mGroupIdToIp[connectData.groupId] = newIp
+                }
+
+                return User(connectData.source, connectData.groupId, newIp)
+            }
+        } catch (e: Exception) {
+            Log.e(VpnManager.TAG, "ConnectionManager processConnection parse error", e)
         }
         return null
     }
 
-    fun disconnect(ipAddress: String) {
-        if (occupiedIps.remove(Utils.ipToInt(ipAddress))) {
-            Log.d("User disconnected, ip: $ipAddress!")
+    fun disconnectLastUser(lastUser: User) {
+
+        mGroupIdToIp.remove(lastUser.id)
+
+        if (occupiedIps.remove(Utils.ipToInt(lastUser.ip))) {
+            Log.d("All users disconnected with ip=${lastUser.ip}; groupId=${lastUser.groupId}")
         }
     }
 }

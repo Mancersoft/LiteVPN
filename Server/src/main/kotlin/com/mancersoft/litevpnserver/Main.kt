@@ -20,7 +20,7 @@ object Main {
     private const val DNS_SERVER = "8.8.8.8"
     private const val FIRST_CLIENT_IP = "10.0.0.1" // "10.0.0.3";
     private const val JAR_NAME = "LiteVPNServer"
-    private const val VERSION = "1.0.2"
+    private const val VERSION = "1.0.9"
 ////    private const val INTERNET_INTERFACE = "eth0"
 ////    private const val UDP_PORT = 8000
 ////    private const val WEB_SOCKET_SERVER_ID = "ServerLiteVPN"

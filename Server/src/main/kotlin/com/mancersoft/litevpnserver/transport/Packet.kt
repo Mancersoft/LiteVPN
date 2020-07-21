@@ -2,7 +2,11 @@ package com.mancersoft.litevpnserver.transport
 
 class Packet {
     var source: Any? = null
+    val sourceId: String?
+        get() = source?.toString()
     var destination: Any? = null
+    val destId: String?
+        get() = destination?.toString()
     lateinit var data: ByteArray
     var length = 0
 

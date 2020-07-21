@@ -6,6 +6,7 @@ import com.mancersoft.litevpn.transport.*
 import java.net.DatagramSocket
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import java.util.*
 import java.util.concurrent.CompletableFuture
 
 private const val CONNECT_PACKET: Byte = 0
@@ -17,6 +18,7 @@ private const val NOT_RELIABLE_HANDSHAKE_ATTEMPTS_COUNT = 50
 class ConnectionManager(private val mSharedSecret: String, private val mService: VpnService) {
 
     private var mHandshakeAttempt = 0
+    private val mGroupId = UUID.randomUUID().toString()
 
     private fun sendQuery(transport: IVpnTransport, packet: Packet) {
         val sendCount = if (transport.isReliable) 1 else NOT_RELIABLE_SEND_PARAMS_COUNT
@@ -35,14 +37,14 @@ class ConnectionManager(private val mSharedSecret: String, private val mService:
     fun sendConnectQuery(transport: IVpnTransport): CompletableFuture<ConnectionParams?> {
         val result = CompletableFuture<ConnectionParams?>()
         val packet = Packet()
-        val secretBytes = mSharedSecret.toByteArray(StandardCharsets.US_ASCII)
-        if (secretBytes.size + 1 > MAX_PACKET_SIZE) {
+        val connectDataBytes = ("$mSharedSecret;$mGroupId").toByteArray(StandardCharsets.UTF_8)
+        if (connectDataBytes.size + 1 > MAX_PACKET_SIZE) {
             completeConnection(transport, result, null)
             return result
         }
-        val connectionData = ByteArray(secretBytes.size + 1)
+        val connectionData = ByteArray(connectDataBytes.size + 1)
         connectionData[PACKET_TYPE_BYTE_OFFSET] = CONNECT_PACKET
-        System.arraycopy(secretBytes, 0, connectionData, SHARED_SECRET_OFFSET, secretBytes.size)
+        System.arraycopy(connectDataBytes, 0, connectionData, SHARED_SECRET_OFFSET, connectDataBytes.size)
         packet.data = connectionData
         packet.length = connectionData.size
         mHandshakeAttempt = 0

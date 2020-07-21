@@ -3,6 +3,7 @@ package com.mancersoft.litevpnserver
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
 import com.google.common.cache.RemovalNotification
+import com.mancersoft.litevpnserver.transport.ConnectData
 import com.mancersoft.litevpnserver.transport.IVpnTransport
 import com.mancersoft.litevpnserver.transport.Packet
 import trikita.log.Log
@@ -21,8 +22,8 @@ object VpnManager {
     private const val CONNECTION_TIMEOUT_SECONDS = 120
 
     private val mExecutorService = Executors.newCachedThreadPool()
-    private val mIpToConnection: Cache<String, Any>
-    private val mConectionToIp = ConcurrentHashMap<Any, String>()
+    //private val mIpToConnection: Cache<String, Any>
+    private val mUserIdToIp = ConcurrentHashMap<String, String>()
     private val mIface = InterfaceManager
     private val mNatManager = NatManager
     private val mConnManager = ConnectionManager
@@ -30,14 +31,24 @@ object VpnManager {
     private var mInternetToUserProcessing: Future<*>? = null
     private lateinit var mTransport: IVpnTransport
 
-    init {
-        mIpToConnection = CacheBuilder.newBuilder()
+    private val mIpToUsers = ConcurrentHashMap<String, Cache<String, User>>()
+
+    private fun createCache(): Cache<String, User> {
+        return CacheBuilder.newBuilder()
                 .expireAfterAccess(CONNECTION_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)
-                .removalListener { notification: RemovalNotification<Any, Any> ->
-                    mConectionToIp.remove(notification.value)
-                    val ipAddress = notification.key as String
-                    mNatManager.clearDisconnectedPorts(ipAddress)
-                    mConnManager.disconnect(ipAddress)
+                .removalListener { notification: RemovalNotification<String, User> ->
+                    val user = notification.value
+                    mUserIdToIp.remove(user.id)
+                    mNatManager.clearDisconnectedPorts(user.ip)
+                    Log.d("User disconnected, id=${user.id}; ip=${user.ip}; groupId=${user.groupId}")
+
+                    if (mIpToUsers[user.ip]!!.asMap().isEmpty()) {
+                        mIpToUsers.remove(user.ip)
+                        mConnManager.disconnectLastUser(user)
+                        PacketBalancer.collectionUpdate(user.ip, null)
+                    } else {
+                        PacketBalancer.collectionUpdate(user.ip, mIpToUsers[user.ip])
+                    }
                 }
                 .build()
     }
@@ -73,11 +84,14 @@ object VpnManager {
                     continue
                 }
                 val ipAddress = Utils.getDestinationIp(data)
-                if (!mIpToConnection.asMap().containsKey(ipAddress)) {
+                if (!mIpToUsers.containsKey(ipAddress)) {
                     continue
                 }
                 packet.length = length
-                packet.destination = mIpToConnection.asMap()[ipAddress]
+                packet.destination = PacketBalancer.getDestTransport(ipAddress, mIpToUsers[ipAddress]!!)
+                if (packet.destination == null) {
+                    continue
+                }
 
                 //System.out.println("Start send transport");
                 mTransport.sendAsync(packet)
@@ -99,31 +113,43 @@ object VpnManager {
                 when (data[PACKET_TYPE_BYTE_OFFSET]) {
                     CONNECT_PACKET -> {
                         if (mReceiveConnections.get()) {
-                            val packetSource = packet.source
                             synchronized(this) {
-                                if (mConectionToIp.containsKey(packetSource)) {
-                                    mConnManager.processConnection(mTransport, packet, mConectionToIp[packetSource])
-                                    return@execute
+                                var isNewUser = true
+                                val connectData = ConnectData.parsePacket(packet) ?: return@execute
+                                if (mUserIdToIp.containsKey(packet.sourceId)) {
+                                    val user = mIpToUsers[mUserIdToIp[packet.sourceId]]!!
+                                            .asMap()[packet.sourceId]!!
+                                    if (connectData.groupId != user.groupId) {
+                                        disconnectUser(user.id!!)
+                                    } else {
+                                        isNewUser = false
+                                    }
                                 }
-                                val assignedIp = mConnManager.processConnection(mTransport, packet, null)
-                                if (assignedIp != null) {
-                                    mIpToConnection.put(assignedIp, packetSource!!)
-                                    mConectionToIp[packetSource] = assignedIp
+                                val user = mConnManager.processConnection(mTransport, connectData) ?: return@execute
+                                if (!mIpToUsers.containsKey(user.ip)) {
+                                    val newCache = createCache()
+                                    newCache.asMap()[user.id] = user
+                                    mIpToUsers[user.ip] = newCache
+                                } else if (isNewUser) {
+                                    mIpToUsers[user.ip]!!.asMap()[user.id] = user
+                                    PacketBalancer.collectionUpdate(user.ip, mIpToUsers[user.ip]!!)
+                                }
+
+                                if (isNewUser) {
+                                    mUserIdToIp[user.id!!] = user.ip
+                                    Log.d("User connected, id=${user.id}; ip=${user.ip}; groupId=${user.groupId}")
                                 }
                             }
                         }
                         return@execute
                     }
                     DISCONNECT_PACKET -> {
-                        val packetSource = packet.source
-                        if (mConectionToIp.containsKey(packetSource)) {
-                            mIpToConnection.asMap().remove(mConectionToIp[packetSource])
-                        }
+                        disconnectUser(packet.sourceId!!)
                         return@execute
                     }
                 }
                 val ipAddress = Utils.getSourceIp(data)
-                if (!mIpToConnection.asMap().containsKey(ipAddress)) {
+                if (!mIpToUsers.containsKey(ipAddress)) {
                     return@execute
                 }
                 if (!mNatManager.convertToInternet(data)) {
@@ -137,6 +163,13 @@ object VpnManager {
                 Log.e(TAG, "VpnManager userToInternetProcessing error", e)
                 stopProcessConnections()
             }
+        }
+    }
+
+    private fun disconnectUser(userId: String) {
+        if (mUserIdToIp.containsKey(userId)) {
+            val ipAddress = mUserIdToIp[userId]
+            mIpToUsers[ipAddress]?.asMap()?.remove(userId)
         }
     }
 
